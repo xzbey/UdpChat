@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QUdpSocket>
 #include <QProcess>
+#include <QScrollBar>
 #include "Info.h"
 
 QT_BEGIN_NAMESPACE
@@ -20,6 +21,9 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+protected:
+    void closeEvent(QCloseEvent*);
+
 private slots:
     void on_confirm_port_clicked();
 
@@ -31,12 +35,14 @@ private slots:
 
     void on_open_new_window_clicked();
 
+    void on_message_textChanged(const QString &arg1);
+
 private:
     Ui::MainWindow *ui;
 
-    Info* info;
-    QUdpSocket* socket;
-    Datagram* datagram;
+    Info* info = 0;
+    QUdpSocket* socket = 0;
+    Datagram* datagram = 0;
 
     QList<QProcess*> processes;
 

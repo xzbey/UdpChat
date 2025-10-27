@@ -14,15 +14,6 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
-    if (info != nullptr)
-        info->deleteLater();
-
-    if (socket != nullptr)
-        socket->deleteLater();
-
-    for (auto& process: processes)
-        process->deleteLater();
-
     delete ui;
 }
 
@@ -54,8 +45,8 @@ void MainWindow::on_confirm_port_clicked()
 
     ui->my_port->setEnabled(0);
     ui->confirm_port->setEnabled(0);
+    ui->my_name->setEnabled(0);
     ui->message->setEnabled(1);
-    ui->send_message->setEnabled(1);
     ui->receiver_ip->setEnabled(1);
     ui->receiver_port->setEnabled(1);
 }
@@ -72,12 +63,18 @@ void MainWindow::on_send_message_clicked()
         return;
     }
 
-    QByteArray message;
-    message.append(ui->message->text().toUtf8());
-    socket->writeDatagram(message, QHostAddress(info->Get_receiverIp()), info->Get_receiverPort());
+    datagram->Set_message(ui->message->text());
+    QByteArray buffer;
+    QDataStream stream(&buffer, QIODevice::WriteOnly);
+    stream << *datagram;
 
-    qInfo() << QString("Message <%1> is sended. // myPort: %2, receiverIp: %3, receiverPort: %4").arg(message).arg(info->Get_myPort()).arg(info->Get_receiverIp()).arg(info->Get_receiverPort());
-    ui->chat->insertHtml("Отправлено " + info->Get_receiverIp() + ":" + QString::number(info->Get_receiverPort()) + "<br>" + message + "<br><br>");
+    socket->writeDatagram(buffer, QHostAddress(info->Get_receiverIp()), info->Get_receiverPort());
+    qInfo() << QString(datagram->Get_name() + datagram->Get_color().name() + " : <" + datagram->Get_message() + "> to " + info->Get_receiverIp() + ":" + QString::number(info->Get_receiverPort()));
+
+    //в начале <div style=\"text-align: right;\"> + в конце закрытие </div> : не работает, прижимает раз и навсегда
+    ui->chat->insertHtml(QString("<span style=\"color: %1;\"><b>Отправлено (%2)</b></span><br>"
+                                 "<span style=\"color: %1;\">%3</span><br><br>").arg(datagram->Get_color().name(), datagram->Get_name(), datagram->Get_message()));
+    ui->chat->verticalScrollBar()->setValue(ui->chat->verticalScrollBar()->maximum());
 }
 
 
@@ -89,9 +86,22 @@ void MainWindow::ReadDatagrams()
     QHostAddress host_address;
     quint16 host_port;
     socket->readDatagram(buffer.data(), buffer.size(), &host_address, &host_port);
-    qInfo() << QString("Сообщение <%1> от %2:%3 получено").arg(buffer.data()).arg(host_address.toString()).arg(host_port);
 
-    ui->chat->insertHtml("Получено от " + host_address.toString() + ":" + QString::number(host_port) + "<br>" + buffer.data() + "<br><br>");
+    if (buffer.isEmpty() or buffer.size() < 10) {
+        qInfo() << QString("Ignored empty buffer from %1:%2").arg(host_address.toString()).arg(QString::number(host_port));
+        return; }
+
+    QDataStream stream(&buffer, QIODevice::ReadOnly);
+    Datagram data;
+    stream >> data;
+
+    qInfo() << QString("Received = " + data.Get_name() + data.Get_color().name() + " : <" + data.Get_message() + ">");
+
+    //в начале <div style=\"text-align: left;\"> + в конце закрытие </div> : не работает, прижимает раз и навсегда
+    ui->chat->insertHtml(QString("<span style=\"color: %1;\"><b>Получено от %2</b></span><br>"
+                                 "<span style=\"color: %1;\">%3</span><br><br>").arg(data.Get_color().name(), data.Get_name(), data.Get_message()));
+
+    ui->chat->verticalScrollBar()->setValue(ui->chat->verticalScrollBar()->maximum());
 }
 
 
@@ -112,4 +122,29 @@ QColor MainWindow::ColorDialog() {
 }
 
 
+void MainWindow::closeEvent(QCloseEvent*e)
+{
+    if (info != nullptr)
+        info->deleteLater();
+    qDebug() << "info deleted";
+
+    if (socket != nullptr)
+        socket->deleteLater();
+    qDebug() << "socket deleted";
+
+    if (datagram != nullptr)
+        delete datagram;
+    qDebug() << "datagram deleted";
+
+    for(auto &process : processes)
+        process->terminate();
+    qDebug() << "processes clear";
+
+    QWidget::closeEvent(e);
+}
+
+void MainWindow::on_message_textChanged(const QString &arg1)
+{
+    ui->send_message->setEnabled(!arg1.isEmpty());
+}
 
