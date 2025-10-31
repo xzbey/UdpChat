@@ -75,6 +75,7 @@ void MainWindow::on_send_message_clicked()
     ui->chat->insertHtml(QString("<span style=\"color: %1;\"><b>Отправлено (%2)</b></span><br>"
                                  "<span style=\"color: %1;\">%3</span><br><br>").arg(datagram->Get_color().name(), datagram->Get_name(), datagram->Get_message()));
     ui->chat->verticalScrollBar()->setValue(ui->chat->verticalScrollBar()->maximum());
+    ui->message->clear();
 }
 
 
