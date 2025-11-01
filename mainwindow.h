@@ -5,6 +5,7 @@
 #include <QUdpSocket>
 #include <QProcess>
 #include <QScrollBar>
+#include <QTime>
 #include "Info.h"
 
 QT_BEGIN_NAMESPACE
@@ -42,11 +43,12 @@ private:
 
     Info* info = 0;
     QUdpSocket* socket = 0;
+    QUdpSocket* broadcast_socket = 0;
     Datagram* datagram = 0;
 
     QList<QProcess*> processes;
 
-    void ReadDatagrams();
+    void ReadDatagrams(QUdpSocket*fsocket);
 
     QColor ColorDialog();
 

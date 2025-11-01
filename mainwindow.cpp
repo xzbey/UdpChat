@@ -39,7 +39,15 @@ void MainWindow::on_confirm_port_clicked()
         qCritical() << QString("Error: bind failed on myPort: %1").arg(info->Get_myPort());
         return;
     }
-    connect(socket, &QUdpSocket::readyRead, this, &MainWindow::ReadDatagrams);
+    connect(socket, &QUdpSocket::readyRead, this, [this]() {
+        MainWindow::ReadDatagrams(socket);
+    });
+
+    broadcast_socket = new QUdpSocket(this);
+    broadcast_socket->bind(QHostAddress::Any, 1234, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint);
+    connect(broadcast_socket, &QUdpSocket::readyRead, this, [this]() {
+        MainWindow::ReadDatagrams(broadcast_socket);
+    });
 
     datagram = new Datagram(ui->my_name->text(), ColorDialog());
 
@@ -68,25 +76,32 @@ void MainWindow::on_send_message_clicked()
     QDataStream stream(&buffer, QIODevice::WriteOnly);
     stream << *datagram;
 
-    socket->writeDatagram(buffer, QHostAddress(info->Get_receiverIp()), info->Get_receiverPort());
-    qInfo() << QString(datagram->Get_name() + datagram->Get_color().name() + " : <" + datagram->Get_message() + "> to " + info->Get_receiverIp() + ":" + QString::number(info->Get_receiverPort()));
+    if (ui->pick_share->currentIndex() == 0) {
+        socket->writeDatagram(buffer, QHostAddress(info->Get_receiverIp()), info->Get_receiverPort());
+        qInfo() << QString(datagram->Get_name() + datagram->Get_color().name() + " : <" + datagram->Get_message() + "> to " + info->Get_receiverIp() + ":" + QString::number(info->Get_receiverPort()));
+    }
+    else {
+        broadcast_socket->writeDatagram(buffer, QHostAddress::Broadcast, 1234);
+        qInfo() << QString(datagram->Get_name() + datagram->Get_color().name() + " : <" + datagram->Get_message() + "> to BroadCast)");
+    }
 
+    QString time = QTime::currentTime().toString("hh:mm:ss");
     //в начале <div style=\"text-align: right;\"> + в конце закрытие </div> : не работает, прижимает раз и навсегда
-    ui->chat->insertHtml(QString("<span style=\"color: %1;\"><b>Отправлено (%2)</b></span><br>"
-                                 "<span style=\"color: %1;\">%3</span><br><br>").arg(datagram->Get_color().name(), datagram->Get_name(), datagram->Get_message()));
+    ui->chat->insertHtml(QString("<span style=\"color: %1;\"><b>Отправлено (%2) | %3</b></span><br>"
+                                 "<span style=\"color: %1;\">%4</span><br><br>").arg(datagram->Get_color().name(), datagram->Get_name(), time, datagram->Get_message()));
     ui->chat->verticalScrollBar()->setValue(ui->chat->verticalScrollBar()->maximum());
     ui->message->clear();
 }
 
 
-void MainWindow::ReadDatagrams()
+void MainWindow::ReadDatagrams(QUdpSocket*fsocket)
 {
     QByteArray buffer;
-    buffer.resize(socket->pendingDatagramSize());
+    buffer.resize(fsocket->pendingDatagramSize());
 
     QHostAddress host_address;
     quint16 host_port;
-    socket->readDatagram(buffer.data(), buffer.size(), &host_address, &host_port);
+    fsocket->readDatagram(buffer.data(), buffer.size(), &host_address, &host_port);
 
     if (buffer.isEmpty() or buffer.size() < 10) {
         qInfo() << QString("Ignored empty buffer from %1:%2").arg(host_address.toString()).arg(QString::number(host_port));
@@ -96,11 +111,15 @@ void MainWindow::ReadDatagrams()
     Datagram data;
     stream >> data;
 
+    if (data.Get_name() == ui->my_name->text())
+        return;
+
     qInfo() << QString("Received = " + data.Get_name() + data.Get_color().name() + " : <" + data.Get_message() + ">");
 
+    QString time = QTime::currentTime().toString("hh:mm:ss");
     //в начале <div style=\"text-align: left;\"> + в конце закрытие </div> : не работает, прижимает раз и навсегда
-    ui->chat->insertHtml(QString("<span style=\"color: %1;\"><b>Получено от %2</b></span><br>"
-                                 "<span style=\"color: %1;\">%3</span><br><br>").arg(data.Get_color().name(), data.Get_name(), data.Get_message()));
+    ui->chat->insertHtml(QString("<span style=\"color: %1;\"><b>Получено от %2 | %3</b></span><br>"
+                                 "<span style=\"color: %1;\">%4</span><br><br>").arg(data.Get_color().name(), data.Get_name(), time, data.Get_message()));
 
     ui->chat->verticalScrollBar()->setValue(ui->chat->verticalScrollBar()->maximum());
 }
